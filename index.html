@@ -622,7 +622,13 @@
   var CASES = PACK.pl.cases;
 
   /* ---------- settings ---------- */
-  var FAST_MS = 5000;            // an answer counts as "known by heart" only under this (reading takes longer than a sum)
+  // an answer counts as "known by heart" only under this. The time by how hard the card is (Lasha 2026-11-03, „the child
+  // needs more time" → the table, „ბ"; was 5 s for all): 8 s Kolejność + the numbers · 10 s Pytania i nazwy · 15 s a
+  // sentence (the exam's „Jaki to przypadek?", the chapters' Sprawdź). By the card, so the exam keeps each card's time
+  function fastMs() {
+    var y = card.type;
+    return y === "spr" || y === "jak" ? 15000 : y === "pyt" || y === "naz" ? 10000 : 8000;
+  }
   // a round's size and its „memorized" line: 8 of 10 fast and right (as Ninja 10); the exam 20 of 25 (the same 80 %;
   // 25 = EXAM_DECK, was 20 / 16 until session 8 — a 20-card exam's record is dropped in load());
   // Kolejność = the seven in order, every step right the first time and fast
@@ -630,9 +636,9 @@
   // a chapter's Sprawdź („ch0" … „ch6", saved under that key): its 5 sentences, memorized at 4 of 5 fast and right
   var CH_MODE = { n: 5, m: 4 };
   function chOf(m) { return /^ch\d$/.test(m) ? +m.slice(2) : -1; }
-  // Points for a right answer: 100 at once, down to 20 at FAST_MS, never below 20. Wrong = 0.
+  // Points for a right answer: 100 at once, down to 20 at the card's time, never below 20. Wrong = 0.
   var PTS_MAX = 100, PTS_MIN = 20;
-  function points(ms) { return Math.max(PTS_MIN, Math.round(PTS_MAX - (PTS_MAX - PTS_MIN) * ms / FAST_MS)); }
+  function points(ms) { return Math.max(PTS_MIN, Math.round(PTS_MAX - (PTS_MAX - PTS_MIN) * ms / fastMs())); }
   // „krasnoludki" = the app's old name, kept: the saved stars stay
   var SAVE_KEY = "krasnoludki_v2";   // a change to the saved shape needs a migration in load() · gitleaks:allow (a storage key, no secret)
 
@@ -1325,10 +1331,10 @@
   $("pad").onclick = function (e) { var b = e.target.closest("button"); if (b) answer(+b.dataset.i, b); };
 
   function barRun(gone) {
-    var b = $("bar"), g = Math.min(gone || 0, FAST_MS);
-    b.style.transition = "none"; b.style.width = (100 - g / FAST_MS * 100) + "%";
+    var b = $("bar"), f = fastMs(), g = Math.min(gone || 0, f);
+    b.style.transition = "none"; b.style.width = (100 - g / f * 100) + "%";
     void b.offsetWidth;          // commit the start width before the transition starts
-    b.style.transition = "width " + (FAST_MS - g) + "ms linear"; b.style.width = "0%";
+    b.style.transition = "width " + (f - g) + "ms linear"; b.style.width = "0%";
   }
   function barStop() {
     var b = $("bar"), w = getComputedStyle(b).width;
@@ -1384,7 +1390,7 @@
     cardI++;
     var spr = card.type === "spr";
     if (spr ? i === 1 : i === card.i) {
-      var fast = ms <= FAST_MS, pts = points(ms);
+      var fast = ms <= fastMs(), pts = points(ms);
       nOk++; if (fast) nFast++;
       nPts += pts;
       sfx("good");
@@ -1450,7 +1456,7 @@
       $("dFb").textContent = "";
       log("ord " + (cardI + 1) + " → " + c.name + " ✓ after a wrong tap");
     } else {
-      var fast = ms <= FAST_MS, pts = points(ms);
+      var fast = ms <= fastMs(), pts = points(ms);
       nOk++; if (fast) nFast++;
       nPts += pts;
       sfx("good");

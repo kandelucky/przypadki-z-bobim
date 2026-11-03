@@ -13,6 +13,6 @@ The home screen, top to bottom, follows the way a child learns:
 - **Egzamin**: 25 cards (questions, names, numbers and 10 of its own sentences with a gap), no help — the mistakes come at the end, each with the right answer
 - **📋 Tabela** (top left): the seven cases with their questions, helper words and examples (*babcia, koszyki*)
 
-A drill counts as memorized at 8 of 10 cards right and each under 5 seconds (Kolejność: all 7; the exam: 20 of 25).
+A drill counts as memorized at 8 of 10 cards right and each within its time (Kolejność: all 7; the exam: 20 of 25). The time per card: 8 seconds for Kolejność and the numbers, 10 for Pytania i nazwy, 15 for a sentence.
 
 To run it, open `index.html` in a browser. There is no build step, and it works offline.
