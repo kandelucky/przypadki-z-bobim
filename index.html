@@ -99,6 +99,8 @@
   #pad.dim { opacity: .2; pointer-events: none; }
   /* the drill's pause window: an opaque screen behind it — the card must not show */
   #pauseAsk[open] { background-color: var(--color-base-100); }
+  /* „Bez czasu" (calm): no bar, no score — their places kept, so the card sits where it does with the clock */
+  #drill.calm #barTrack, #drill.calm #dScore { visibility: hidden; }
 
   /* a home button (.rec, from Ninja 10): its name above, the record on a darker band along the bottom —
      „🏆 640" left, ☆ → ⭐ right once memorized. .big = the exam */
@@ -258,7 +260,7 @@
         <span id="dScore" class="text-lg font-bold text-warning"></span>
       </div>
       <div id="dS" class="sent flex justify-center gap-x-1 text-center"></div>
-      <div class="h-2 shrink-0 rounded-full bg-base-300 overflow-hidden"><div id="bar" class="h-full bg-primary"></div></div>
+      <div id="barTrack" class="h-2 shrink-0 rounded-full bg-base-300 overflow-hidden"><div id="bar" class="h-full bg-primary"></div></div>
       <div class="flex-1 flex flex-col items-center justify-center gap-3 text-center">
         <p id="dPr" class="text-lg opacity-70"></p>
         <div id="dQ" class="text-4xl font-bold leading-tight"></div>
@@ -285,7 +287,7 @@
       <div class="flex-1 flex flex-col items-center justify-center gap-3 w-full">
         <div id="resEm" class="text-7xl leading-none"></div>
         <h2 id="resTitle" class="text-2xl font-bold leading-tight"></h2>
-        <div class="relative grid grid-cols-2 gap-3 w-full mt-5">
+        <div id="resTiles" class="relative grid grid-cols-2 gap-3 w-full mt-5">
           <span id="resNew" class="tag gold rPop absolute z-10 -top-5 left-0 right-0 mx-auto w-max text-lg" data-t="res_rec_new"></span>
           <div id="resNowBox" class="rGlow relative rounded-box bg-base-200 border-2 border-warning/40 pt-8 pb-3">
             <div class="text-xs font-bold uppercase tracking-widest opacity-70" data-t="res_now"></div>
@@ -429,6 +431,19 @@
       <button id="pauseOut" class="btn btn-ghost btn-lg btn-block gap-2"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg><span data-t="btn_exit"></span></button>
     </div>
   </dialog>
+  <!-- entering the Egzamin asks (Lasha 2026-11-03): Ninja 10's sheet, „Na punkty" or „Bez czasu" -->
+  <dialog id="modeAsk" class="modal modal-bottom">
+    <div class="modal-box bg-base-200 p-5 flex flex-col gap-3">
+      <p id="modeName" class="text-2xl font-bold text-center pb-1"></p>
+      <button id="modePts" class="btn btn-primary btn-lg btn-block h-auto min-h-21 py-2 flex-col gap-0.5">
+        <span data-t="mode_pts"></span><small id="modeRec" class="text-sm font-medium opacity-75"></small>
+      </button>
+      <button id="modeCalm" class="btn btn-outline btn-primary btn-lg btn-block h-auto min-h-21 py-2 px-2 flex-col gap-0.5">
+        <span data-t="mode_calm"></span><small class="text-sm font-medium opacity-75" data-t="mode_calm_sub"></small>
+      </button>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button tabindex="-1"></button></form>
+  </dialog>
 
 <script>
   "use strict";
@@ -465,6 +480,11 @@
       res_more: function (n) { return "Jeszcze raz — potrzeba " + n + " szybkich odpowiedzi."; },
       res_fast: function (n, of) { return "⚡ Szybko i dobrze: " + n + " / " + of; },
       res_ok: function (n, of) { return "✓ Dobrze: " + n + " / " + of; },
+      mode_pts: "🏆 Na punkty",
+      mode_rec: function (p) { return "Rekord: " + p; },
+      mode_new: "Z czasem i rekordem",
+      mode_calm: "🌿 Bez czasu",
+      mode_calm_sub: "Bez czasu i punktów",
       btn_again: "Jeszcze raz",
       btn_back: "Wróć",
       btn_exit: "Wyjdź",
@@ -1017,6 +1037,7 @@
     if ($("exitAsk").open) $("exitAsk").close();
     else if ($("resetAsk").open) $("resetAsk").close();
     else if ($("pauseAsk").open) $("pauseAsk").close();
+    else if ($("modeAsk").open) $("modeAsk").close();
     else if (current === "pick") log("back: the pick first");
     else if (current === "name") log("back: the name first");
     else if (current === "drill") pauseOpen();
@@ -1061,7 +1082,7 @@
   $("homeS").innerHTML = sentHtml(-1);
   $("goTab").onclick = function () { $("tabL").scrollTop = 0; show("tab"); log("table"); };
   Array.prototype.forEach.call(document.querySelectorAll("#home [data-m]"), function (b) {
-    b.onclick = function () { drillStart(b.dataset.m); };
+    b.onclick = function () { if (b.dataset.m === "egz") modeOpen(); else drillStart(b.dataset.m); };
   });
   // ② the seven chapters, dark tiles (.calm): badge + name, ☆ → ⭐ once its Sprawdź is memorized. A tap opens the chapter.
   // One column of seven: min-h-9, so home still fits without scrolling
@@ -1331,6 +1352,7 @@
   $("pad").onclick = function (e) { var b = e.target.closest("button"); if (b) answer(+b.dataset.i, b); };
 
   function barRun(gone) {
+    if (calm) return;
     var b = $("bar"), f = fastMs(), g = Math.min(gone || 0, f);
     b.style.transition = "none"; b.style.width = (100 - g / f * 100) + "%";
     void b.offsetWidth;          // commit the start width before the transition starts
@@ -1341,9 +1363,25 @@
     b.style.transition = "none"; b.style.width = w;
   }
 
-  // drillStart("kol" | "pn" | "egz" | "ch0" … "ch6"); with no argument the same drill again
-  function drillStart(m) {
-    if (m) mode = m;
+  // Entering the Egzamin asks first, on Ninja 10's sheet (Lasha 2026-11-03: „the exam in a version without time too"; the
+  // other drills go straight in). „Na punkty" = as ever. „Bez czasu" (calm) = the same 25 cards, still no help — no bar, no
+  // score, no ⚡, and no record, no ⭐, nothing for the top 10 (⭐ needs the clock). A tap above the sheet, back or Esc = no
+  // round. Not saved: every entry asks; „Jeszcze raz" and the pause's „again" keep the round's choice
+  var calm = false;
+  function modeOpen() {
+    var b = S.best.egz;
+    $("modeName").textContent = t("m_egz");
+    $("modeRec").textContent = b && b.pts > 0 ? t("mode_rec", b.pts) : t("mode_new");
+    $("modeAsk").showModal();
+    log("entering egz: with the clock or without?");
+  }
+  function modeGo(c) { $("modeAsk").close(); drillStart("egz", c); }
+  $("modePts").onclick = function () { modeGo(false); };
+  $("modeCalm").onclick = function () { modeGo(true); };
+
+  // drillStart("kol" | "pn" | "egz" | "ch0" … "ch6", without the clock?); with no argument the same drill again
+  function drillStart(m, c) {
+    if (m) { mode = m; calm = !!c; }
     round++;
     var chI = chOf(mode);
     deck = chI >= 0 ? shuffle([0, 1, 2, 3, 4]).map(function (k) { return { type: "spr", i: chI, k: k }; })
@@ -1354,6 +1392,7 @@
     $("dS").style.display = mode === "egz" ? "none" : "";
     $("dQ").style.display = mode === "kol" ? "none" : "";
     $("dO").style.display = mode === "kol" ? "flex" : "none";
+    $("drill").classList.toggle("calm", calm);
     show("drill");
     nextCard();
     log("drill " + mode + ": " + deck.map(function (c) { return c.type + ":" + CASES[c.i].ab + (c.k !== undefined ? c.k + 1 : ""); }).join(" · "));
@@ -1390,7 +1429,7 @@
     cardI++;
     var spr = card.type === "spr";
     if (spr ? i === 1 : i === card.i) {
-      var fast = ms <= fastMs(), pts = points(ms);
+      var fast = !calm && ms <= fastMs(), pts = calm ? 0 : points(ms);
       nOk++; if (fast) nFast++;
       nPts += pts;
       sfx("good");
@@ -1402,9 +1441,9 @@
       }
       // Jaki to przypadek?: the underlined word takes its case's colour, the same moment longer
       if (card.type === "jak") $("dQ").querySelector("u").style.color = textCol(c.h);
-      $("dFb").innerHTML = t(fast ? "fb_fast" : "fb_ok") + ' <b class="pop text-warning">+' + pts + "</b>";
+      $("dFb").innerHTML = calm ? t("fb_ok") : t(fast ? "fb_fast" : "fb_ok") + ' <b class="pop text-warning">+' + pts + "</b>";
       $("dScore").textContent = nPts;
-      log(card.type + " " + q + " → " + pick + " ✓ " + (ms / 1000).toFixed(3) + "s +" + pts + (fast ? " ⚡" : " (slow)"));
+      log(card.type + " " + q + " → " + pick + " ✓ " + (calm ? "(no clock)" : (ms / 1000).toFixed(3) + "s +" + pts + (fast ? " ⚡" : " (slow)")));
       var r = round;
       setTimeout(function () { if (r === round) nextCard(); }, spr || card.type === "jak" ? 1100 : 700);
     } else if (mode === "egz") {
@@ -1507,6 +1546,8 @@
 
   /* ---------- result ---------- */
   function finish() {
+    $("resTiles").style.display = "";
+    if (calm) { finishCalm(); return; }
     var need = (MODES[mode] || CH_MODE).m, b = S.best[mode] || { fast: 0, ok: 0, master: false }, master = nFast >= need;
     if (nFast > b.fast || (nFast === b.fast && nOk > b.ok)) { b.fast = nFast; b.ok = nOk; }
     b.master = b.master || master;
@@ -1530,6 +1571,19 @@
     log("round done: " + nPts + " points" + (newRec ? " (record)" : "") + " · fast " + nFast + " · correct " + nOk +
         (master ? " · <b>MASTERED</b>" : ""));
     if (newRec) sync();
+  }
+  // „Bez czasu"'s result: the right answers + the exam's mistakes, nothing else — no tiles, nothing saved
+  function finishCalm() {
+    $("res").classList.remove("rBeat");
+    $("resTiles").style.display = "none";
+    $("resEm").innerHTML = nOk >= MODES.egz.m ? danceHtml() : "💪";
+    $("resTitle").textContent = t("res_ok", nOk, deck.length);
+    $("resFast").textContent = $("resOk").textContent = "";
+    $("resErr").style.display = "";
+    $("resErr").innerHTML = errsHtml();
+    $("resErr").scrollTop = 0;
+    show("res");
+    log("round done without the clock: correct " + nOk + " / " + deck.length);
   }
   // the exam's mistakes: the card with its right answer in the case's colour (a sentence: the form in its gap), the
   // child's pick with ✕, the case's „Zapamiętaj" box as on the wrong sheet. No mistakes → one line
